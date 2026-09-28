@@ -13,4 +13,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
-);
+)
+
+// Note: The AuthProvider wraps the entire application, providing authentication context to all components.;
