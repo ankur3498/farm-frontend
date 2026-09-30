@@ -10,9 +10,11 @@ import WorkTasks from "./pages/WorkTasks.jsx";
 import WorkManage from "./pages/WorkManage.jsx";
 import ScheduleBuilder from "./pages/ScheduleBuilder.jsx";
 import Assets from "./pages/Assets.jsx";
-import Poultry from "./pages/Paultry.jsx";
-import Goat from "./pages/Goat.jsx";
+import PoultryModule from "./pages/PoultryModule.jsx";
 import Animals from "./pages/Animals.jsx";
+import Expenses from "./pages/Expenses.jsx";
+import FieldPatches from "./pages/FieldPatches.jsx";
+import Financials from "./pages/Financials.jsx";
 import Layout from "./layout/Layout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
@@ -29,6 +31,9 @@ function App() {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/field-patches" element={<FieldPatches />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/financials" element={<Financials />} />
         <Route path="/staff" element={<Staff />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/team-attendance" element={<TeamAttendance />} />
@@ -37,8 +42,8 @@ function App() {
         <Route path="/work-management" element={<WorkManage />} />
         <Route path="/schedule" element={<ScheduleBuilder />} />
         <Route path="/assets" element={<Assets />} />
-        <Route path="/poultry" element={<Poultry />} />
-        <Route path="/goat" element={<Goat />} />
+        <Route path="/poultry/*" element={<PoultryModule />} />
+        <Route path="/poultry" element={<PoultryModule />} />
         <Route path="/animals" element={<Animals />} />
       </Route>
 

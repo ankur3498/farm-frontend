@@ -33,7 +33,7 @@ const statusLabel = {
   declined: "Declined ❌",
 };
 
-const TABS = ["Review Queue", "Assign Task", "Daily Rules", "All Tasks"];
+const TABS = ["Review Queue", "Previous Work History", "Assign Task", "Daily Rules", "All Tasks"];
 
 const categoryIcon = {
   Cleaning: "🧹",
@@ -41,9 +41,7 @@ const categoryIcon = {
   Cropping: "🌾",
   Feeding: "🌿",
   Medication: "💉",
-  "Goat Batch Weight": "🐐",
   "Hen/Chicken Batch Weight": "🐔",
-  "Goat Batch": "🐐",
   "Hen/Chicken Batch": "🐔",
 };
 
@@ -227,7 +225,13 @@ const WorkManage = () => {
   };
 
   const pendingTasks = tasks.filter((t) => t.status === "submitted");
-  const visibleTasks = tab === "Review Queue" ? pendingTasks : tasks;
+  const historyTasks = tasks.filter((t) => t.status === "approved" || t.status === "declined" || t.status === "completed");
+  const visibleTasks =
+    tab === "Review Queue"
+      ? pendingTasks
+      : tab === "Previous Work History"
+      ? historyTasks
+      : tasks;
   const pagedVisibleTasks = visibleTasks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
@@ -242,24 +246,26 @@ const WorkManage = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => { setTab(t); setPage(1); }}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition ${
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition whitespace-nowrap ${
               tab === t ? "border-farm-600 text-farm-700" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {t}{t === "Review Queue" && pendingTasks.length > 0 ? ` (${pendingTasks.length})` : ""}
+            {t}
+            {t === "Review Queue" && pendingTasks.length > 0 ? ` (${pendingTasks.length})` : ""}
+            {t === "Previous Work History" && historyTasks.length > 0 ? ` (${historyTasks.length})` : ""}
           </button>
         ))}
       </div>
 
-      {/* Review Queue / All Tasks */}
-      {(tab === "Review Queue" || tab === "All Tasks") && (
+      {/* Review Queue / Previous Work History / All Tasks */}
+      {(tab === "Review Queue" || tab === "Previous Work History" || tab === "All Tasks") && (
         <>
-          {tab === "All Tasks" && (
+          {(tab === "All Tasks" || tab === "Previous Work History") && (
             <div className="flex flex-wrap items-end gap-2 mb-4">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Date</label>

@@ -19,9 +19,7 @@ const categoryIcon = {
   Cropping: "🌾",
   Feeding: "🌿",
   Medication: "💉",
-  "Goat Batch Weight": "🐐",
   "Hen/Chicken Batch Weight": "🐔",
-  "Goat Batch": "🐐",
   "Hen/Chicken Batch": "🐔",
 };
 
