@@ -204,47 +204,6 @@ const WorkTasks = () => {
         </div>
       )}
 
-      {/* Session Clock-in Bar */}
-      {sessionLogs.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs p-4 mb-6">
-          <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Today's Session Attendance</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {sessionLogs.map((log) => (
-              <div key={log.session._id} className="border border-gray-200 rounded-xl p-3 bg-gray-50/50">
-                <p className="text-xs font-bold text-gray-800">{log.session.name}</p>
-                <p className="text-[10px] text-gray-400 mb-2">{log.session.startTime} – {log.session.endTime}</p>
-                {log.status === "not_started" && (
-                  <button
-                    onClick={() => startSession(log.session._id)}
-                    disabled={sessionActionLoading === log.session._id}
-                    className="w-full bg-farm-600 hover:bg-farm-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg py-1.5 transition"
-                  >
-                    ▶ Start Session
-                  </button>
-                )}
-                {log.status === "in_progress" && (
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-blue-600 font-semibold">● Started {fmtTime(log.startedAt)}</p>
-                    <button
-                      onClick={() => endSession(log.session._id)}
-                      disabled={sessionActionLoading === log.session._id}
-                      className="w-full bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg py-1.5 transition"
-                    >
-                      ■ End Session
-                    </button>
-                  </div>
-                )}
-                {log.status === "completed" && (
-                  <p className="text-[10px] text-emerald-700 bg-emerald-50 rounded-lg py-1 text-center font-bold">
-                    ✓ Completed {fmtTime(log.completedAt)}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-3.5 shadow-xs">

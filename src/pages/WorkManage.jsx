@@ -6,6 +6,22 @@ import Pagination from "../components/Pagination.jsx";
 const IST = "Asia/Kolkata";
 const PAGE_SIZE = 12;
 
+const TIME_SLOTS_7AM_8PM = [
+  "07:00 AM - 08:00 AM",
+  "08:00 AM - 09:00 AM",
+  "09:00 AM - 10:00 AM",
+  "10:00 AM - 11:00 AM",
+  "11:00 AM - 12:00 PM",
+  "12:00 PM - 01:00 PM",
+  "01:00 PM - 02:00 PM",
+  "02:00 PM - 03:00 PM",
+  "03:00 PM - 04:00 PM",
+  "04:00 PM - 05:00 PM",
+  "05:00 PM - 06:00 PM",
+  "06:00 PM - 07:00 PM",
+  "07:00 PM - 08:00 PM",
+];
+
 const fmtDate = (iso) =>
   new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: IST });
 
@@ -58,6 +74,9 @@ const WorkManage = () => {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Staff Tabs selection for Excel Timesheet (ALL or staffId)
+  const [selectedStaffId, setSelectedStaffId] = useState("ALL");
+
   // Review queue + all tasks + timesheets
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(true);
@@ -65,6 +84,10 @@ const WorkManage = () => {
   const [reviewNoteDraft, setReviewNoteDraft] = useState({});
   const [reviewLoadingId, setReviewLoadingId] = useState(null);
   const [page, setPage] = useState(1);
+
+  // Draft state for Excel cells inline edits: timeSlot -> { category, notes }
+  const [excelDraft, setExcelDraft] = useState({});
+  const [savingSlot, setSavingSlot] = useState(null);
 
   // Media Modal (for full photo + video preview)
   const [mediaModal, setMediaModal] = useState(null);
@@ -188,6 +211,35 @@ const WorkManage = () => {
       loadTasks(filters);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to delete task");
+    }
+  };
+
+  // Save Excel Slot inline from 7 AM to 8 PM
+  const handleSaveExcelSlot = async (slotTime, staffId) => {
+    const draftKey = `${staffId}_${slotTime}`;
+    const draft = excelDraft[draftKey] || {};
+    const catName = draft.category;
+    if (!catName || !catName.trim()) {
+      alert("Please select or enter a Category for this time slot.");
+      return;
+    }
+
+    setSavingSlot(draftKey);
+    try {
+      const res = await api.post("/work/assign", {
+        categories: [catName.trim()],
+        assignedTo: [staffId],
+        date: filters.date || fmtDateInput(now),
+        timeLabel: slotTime,
+        notes: draft.notes || "",
+      });
+      setSuccessMsg(`✅ ${res.data.message}`);
+      setTimeout(() => setSuccessMsg(""), 3000);
+      loadTasks(filters);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to save slot");
+    } finally {
+      setSavingSlot(null);
     }
   };
 
@@ -326,6 +378,8 @@ const WorkManage = () => {
   const approvedCount = tasks.filter((t) => t.status === "approved").length;
   const declinedCount = tasks.filter((t) => t.status === "declined").length;
 
+  const selectedStaffObj = staffList.find((s) => s._id === selectedStaffId);
+
   return (
     <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
       {/* Page Header */}
@@ -333,7 +387,7 @@ const WorkManage = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Work & Schedule Management</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage staff daily time schedules, monitor live timesheets, review work proof & approve tasks
+            Manage staff daily time schedules (Morning 7 AM - Evening 8 PM), timesheets, & review work proof
           </p>
         </div>
 
@@ -367,7 +421,7 @@ const WorkManage = () => {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Primary Section Tabs */}
       <div className="flex gap-1.5 mb-6 border-b border-gray-200 overflow-x-auto pb-0.5">
         {TABS.map((t) => (
           <button
@@ -394,70 +448,54 @@ const WorkManage = () => {
         ))}
       </div>
 
-      {/* TAB 1: Staff Daily Timesheets & Live Status (Table Format) */}
+      {/* TAB 1: Staff Daily Timesheets (Excel Format 7:00 AM to 8:00 PM) */}
       {(tab === "Staff Daily Timesheets" || tab === "Review Queue" || tab === "Previous Work History") && (
         <>
-          {/* Quick Filter Bar */}
+          {/* STAFF TABS ON TOP */}
           <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs p-4 mb-6">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[140px]">
-                <label className="block text-[11px] font-medium text-gray-500 mb-1">Date</label>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                👥 Select Staff Member Schedule (Morning 7:00 AM – Evening 8:00 PM)
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500">Date:</span>
                 <input
                   type="date"
                   value={filters.date}
-                  onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-                  className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-farm-500"
+                  onChange={(e) => {
+                    setFilters({ ...filters, date: e.target.value });
+                    loadTasks({ date: e.target.value });
+                  }}
+                  className="text-xs font-semibold border border-gray-300 rounded-xl px-3 py-1.5 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-farm-500"
                 />
               </div>
+            </div>
 
-              <div className="min-w-[150px]">
-                <label className="block text-[11px] font-medium text-gray-500 mb-1">Staff Member</label>
-                <select
-                  value={filters.userId}
-                  onChange={(e) => setFilters({ ...filters, userId: e.target.value })}
-                  className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-farm-500"
-                >
-                  <option value="">All Staff</option>
-                  {staffList.map((s) => (
-                    <option key={s._id} value={s._id}>{s.name} ({roleLabel(s.role)})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="min-w-[140px]">
-                <label className="block text-[11px] font-medium text-gray-500 mb-1">Category</label>
-                <select
-                  value={filters.category}
-                  onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                  className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-farm-500"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((c) => (
-                    <option key={c._id} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="min-w-[140px]">
-                <label className="block text-[11px] font-medium text-gray-500 mb-1">Live Status</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-farm-500"
-                >
-                  <option value="">All Statuses</option>
-                  {Object.keys(statusLabel).map((s) => (
-                    <option key={s} value={s}>{statusLabel[s]}</option>
-                  ))}
-                </select>
-              </div>
-
+            {/* Scrollable Staff Tabs */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
               <button
-                onClick={applyFilters}
-                className="bg-farm-600 hover:bg-farm-700 text-white text-xs font-semibold rounded-xl px-4 py-2 transition"
+                onClick={() => setSelectedStaffId("ALL")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap border ${
+                  selectedStaffId === "ALL"
+                    ? "bg-farm-600 text-white border-farm-600 shadow-xs"
+                    : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                }`}
               >
-                Apply Filters
+                <span>📊</span> All Staff Master Grid
               </button>
+              {staffList.map((s) => (
+                <button
+                  key={s._id}
+                  onClick={() => setSelectedStaffId(s._id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap border ${
+                    selectedStaffId === s._id
+                      ? "bg-farm-600 text-white border-farm-600 shadow-xs"
+                      : "bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                  }`}
+                >
+                  <span>👤</span> {s.name} <span className="text-[10px] opacity-80">({roleLabel(s.role)})</span>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -485,201 +523,273 @@ const WorkManage = () => {
             </div>
           </div>
 
-          {/* TABULAR STAFF TIMESHEET TABLE */}
-          {tasksLoading ? (
-            <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-400">
-              <div className="inline-block w-6 h-6 border-2 border-farm-600 border-t-transparent rounded-full animate-spin mb-2"></div>
-              <p className="text-sm font-medium">Loading staff timesheets...</p>
-            </div>
-          ) : visibleTasks.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-400 shadow-xs">
-              <p className="text-4xl mb-2">📅</p>
-              <p className="text-base font-semibold text-gray-700">No timesheet records found</p>
-              <p className="text-xs text-gray-500 mt-1">Try changing the date or click "+ Add Time Schedule Item" to create one.</p>
-            </div>
-          ) : (
+          {/* SINGLE STAFF EXCEL TIMESHEET VIEW (7:00 AM to 8:00 PM) */}
+          {selectedStaffId !== "ALL" ? (
             <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs overflow-hidden mb-6">
+              <div className="bg-gray-50/90 px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h2 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <span className="text-lg">👤</span> {selectedStaffObj?.name}'s Excel Daily Timesheet
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Schedule slots from Morning 07:00 AM to Evening 08:00 PM ({filters.date})
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAddScheduleModalOpen(true)}
+                  className="bg-farm-600 hover:bg-farm-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition"
+                >
+                  + Add Custom Slot
+                </button>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-200 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                      <th className="px-4 py-3.5">Staff Member</th>
-                      <th className="px-4 py-3.5">Time Schedule</th>
-                      <th className="px-4 py-3.5">Category & Task</th>
-                      <th className="px-4 py-3.5">Instructions</th>
-                      <th className="px-4 py-3.5 text-center">Live Status</th>
-                      <th className="px-4 py-3.5">Submitted Proof & Remarks</th>
-                      <th className="px-4 py-3.5 text-right">Actions</th>
+                    <tr className="bg-gray-100/70 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 min-w-[170px] border-r border-gray-200">⏰ Time Slot</th>
+                      <th className="px-4 py-3 min-w-[220px] border-r border-gray-200">📋 Category / Task</th>
+                      <th className="px-4 py-3 min-w-[240px] border-r border-gray-200">📝 Work Instructions</th>
+                      <th className="px-4 py-3 text-center min-w-[140px] border-r border-gray-200">Live Status</th>
+                      <th className="px-4 py-3 min-w-[200px] border-r border-gray-200">Submitted Proof & Remark</th>
+                      <th className="px-4 py-3 text-right min-w-[130px]">Quick Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs">
-                    {pagedVisibleTasks.map((task) => (
-                      <tr key={task._id} className="hover:bg-gray-50/80 transition-colors">
-                        {/* Staff */}
-                        <td className="px-4 py-3.5 font-medium text-gray-900 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-farm-100 text-farm-800 font-bold flex items-center justify-center text-xs">
-                              {(task.assignedTo?.name || "U")[0]}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-gray-900">{task.assignedTo?.name || "Unassigned"}</p>
-                              <p className="text-[10px] text-gray-400 capitalize">{roleLabel(task.assignedTo?.role)}</p>
-                            </div>
-                          </div>
-                        </td>
+                  <tbody className="divide-y divide-gray-200 text-xs">
+                    {TIME_SLOTS_7AM_8PM.map((slotTime) => {
+                      // Find existing task for this staff member in this time slot
+                      const task = tasks.find(
+                        (t) =>
+                          String(t.assignedTo?._id || t.assignedTo) === String(selectedStaffId) &&
+                          t.timeLabel === slotTime
+                      );
 
-                        {/* Time Schedule */}
-                        <td className="px-4 py-3.5 whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-gray-800">
-                              ⏰ {task.timeLabel || "Anytime Today"}
-                            </span>
-                            {task.session && (
-                              <span className="text-[10px] text-farm-700 bg-farm-50 px-1.5 py-0.5 rounded w-fit mt-0.5">
-                                {task.session}
-                              </span>
+                      const draftKey = `${selectedStaffId}_${slotTime}`;
+                      const currentDraft = excelDraft[draftKey] || {
+                        category: task?.category || "",
+                        notes: task?.notes || "",
+                      };
+
+                      return (
+                        <tr key={slotTime} className="hover:bg-blue-50/30 transition-colors">
+                          {/* Time Slot Column */}
+                          <td className="px-4 py-3 font-bold text-gray-800 bg-gray-50/50 border-r border-gray-200 whitespace-nowrap">
+                            {slotTime}
+                          </td>
+
+                          {/* Category Cell (Excel Input / Select) */}
+                          <td className="px-3 py-2 border-r border-gray-200">
+                            {task ? (
+                              <div className="flex items-center gap-2 font-bold text-gray-900">
+                                <span className="text-base">{categoryIcon[task.category] || "📋"}</span>
+                                <span>{task.category}</span>
+                              </div>
+                            ) : (
+                              <select
+                                value={currentDraft.category}
+                                onChange={(e) =>
+                                  setExcelDraft({
+                                    ...excelDraft,
+                                    [draftKey]: { ...currentDraft, category: e.target.value },
+                                  })
+                                }
+                                className="w-full text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-farm-500 bg-white"
+                              >
+                                <option value="">— Select Category —</option>
+                                {categories.map((c) => (
+                                  <option key={c._id} value={c.name}>{c.name}</option>
+                                ))}
+                              </select>
                             )}
-                            <span className="text-[10px] text-gray-400 mt-0.5">📅 {fmtDate(task.date)}</span>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Category & Task */}
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2 font-semibold text-gray-800">
-                            <span className="text-base">{categoryIcon[task.category] || "📋"}</span>
-                            <span>{task.category}</span>
-                          </div>
-                          {task.track && (
-                            <span className="text-[10px] text-gray-500 block mt-0.5">Track: {task.track}</span>
-                          )}
-                        </td>
+                          {/* Instructions Cell */}
+                          <td className="px-3 py-2 border-r border-gray-200">
+                            {task ? (
+                              <span className="text-gray-700">{task.notes || "—"}</span>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="Enter instructions..."
+                                value={currentDraft.notes}
+                                onChange={(e) =>
+                                  setExcelDraft({
+                                    ...excelDraft,
+                                    [draftKey]: { ...currentDraft, notes: e.target.value },
+                                  })
+                                }
+                                className="w-full text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-farm-500 bg-white"
+                              />
+                            )}
+                          </td>
 
-                        {/* Instructions */}
-                        <td className="px-4 py-3.5 max-w-xs">
-                          {task.notes ? (
-                            <p className="text-gray-600 text-xs bg-gray-50 p-2 rounded-lg border border-gray-100 line-clamp-2">
-                              {task.notes}
-                            </p>
-                          ) : (
-                            <span className="text-gray-300 italic text-[11px]">No notes</span>
-                          )}
-                        </td>
+                          {/* Live Status Cell */}
+                          <td className="px-4 py-3 text-center border-r border-gray-200 whitespace-nowrap">
+                            {task ? (
+                              <span className={`inline-block text-[11px] px-2.5 py-1 rounded-full ${statusStyle[task.status]}`}>
+                                {statusLabel[task.status]}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-[11px] italic">Not Assigned</span>
+                            )}
+                          </td>
 
-                        {/* Live Status */}
-                        <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                          <span className={`inline-block text-[11px] px-2.5 py-1 rounded-full ${statusStyle[task.status]}`}>
-                            {statusLabel[task.status]}
-                          </span>
-                        </td>
-
-                        {/* Submitted Proof & Remarks */}
-                        <td className="px-4 py-3.5 min-w-[200px]">
-                          {task.proof && (task.proof.photoUrl || task.proof.videoUrl) ? (
-                            <div className="space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                {task.proof.photoUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setMediaModal({
-                                      photoUrl: task.proof.photoUrl,
-                                      videoUrl: task.proof.videoUrl,
-                                      taskTitle: task.category,
-                                      staffName: task.assignedTo?.name
-                                    })}
-                                    className="flex items-center gap-1 text-[11px] text-farm-700 bg-farm-50 hover:bg-farm-100 border border-farm-200 px-2 py-1 rounded-md font-medium transition"
-                                  >
-                                    📷 Photo Proof
-                                  </button>
-                                )}
-                                {task.proof.videoUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setMediaModal({
-                                      photoUrl: task.proof.photoUrl,
-                                      videoUrl: task.proof.videoUrl,
-                                      taskTitle: task.category,
-                                      staffName: task.assignedTo?.name
-                                    })}
-                                    className="flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-1 rounded-md font-semibold transition"
-                                  >
-                                    🎥 Watch Video
-                                  </button>
+                          {/* Submitted Proof & Remark Cell */}
+                          <td className="px-4 py-3 border-r border-gray-200">
+                            {task?.proof && (task.proof.photoUrl || task.proof.videoUrl) ? (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  {task.proof.photoUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setMediaModal({ photoUrl: task.proof.photoUrl, videoUrl: task.proof.videoUrl, taskTitle: task.category, staffName: selectedStaffObj?.name })}
+                                      className="text-[10px] text-farm-700 bg-farm-50 border border-farm-200 px-2 py-0.5 rounded font-semibold"
+                                    >
+                                      📷 Photo
+                                    </button>
+                                  )}
+                                  {task.proof.videoUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setMediaModal({ photoUrl: task.proof.photoUrl, videoUrl: task.proof.videoUrl, taskTitle: task.category, staffName: selectedStaffObj?.name })}
+                                      className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded font-semibold"
+                                    >
+                                      🎥 Video
+                                    </button>
+                                  )}
+                                </div>
+                                {(task.userRemark || task.sampleWeight) && (
+                                  <p className="text-[10px] text-gray-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">
+                                    💬 {task.userRemark || task.sampleWeight}
+                                  </p>
                                 )}
                               </div>
-                              {(task.userRemark || task.sampleWeight) && (
-                                <p className="text-[11px] text-gray-700 bg-amber-50/80 border border-amber-100 rounded-md px-2 py-1">
-                                  💬 <span className="font-semibold">Remark:</span> {task.userRemark || task.sampleWeight}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 text-[11px] italic">No proof submitted yet</span>
-                          )}
+                            ) : (
+                              <span className="text-gray-300 text-[11px] italic">—</span>
+                            )}
+                          </td>
+
+                          {/* Quick Actions Cell */}
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            {task ? (
+                              <div className="flex items-center justify-end gap-2">
+                                {task.status === "submitted" && (
+                                  <button
+                                    onClick={() => handleReview(task, "approve")}
+                                    className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 rounded"
+                                  >
+                                    Approve
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteTask(task)}
+                                  className="text-gray-400 hover:text-rose-600 text-sm"
+                                  title="Clear / Delete Task"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleSaveExcelSlot(slotTime, selectedStaffId)}
+                                disabled={savingSlot === draftKey || !currentDraft.category}
+                                className="bg-farm-600 hover:bg-farm-700 disabled:opacity-40 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition"
+                              >
+                                {savingSlot === draftKey ? "Saving..." : "💾 Save Slot"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* ALL STAFF MASTER EXCEL MATRIX GRID */
+            <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs overflow-hidden mb-6">
+              <div className="bg-gray-50/90 px-5 py-4 border-b border-gray-200">
+                <h2 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                  <span>📊</span> Master Staff Excel Grid (Morning 7:00 AM – Evening 8:00 PM)
+                </h2>
+                <p className="text-xs text-gray-500">Live view of all staff time slots side by side</p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100/70 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
+                      <th className="px-4 py-3 min-w-[170px] border-r border-gray-200 sticky left-0 bg-gray-100 z-10">
+                        ⏰ Time Slot
+                      </th>
+                      {staffList.map((s) => (
+                        <th key={s._id} className="px-4 py-3 min-w-[180px] border-r border-gray-200">
+                          <div>
+                            <p className="font-bold text-gray-900">{s.name}</p>
+                            <p className="text-[10px] text-gray-400 font-normal">{roleLabel(s.role)}</p>
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 text-xs">
+                    {TIME_SLOTS_7AM_8PM.map((slotTime) => (
+                      <tr key={slotTime} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-4 py-3 font-bold text-gray-800 bg-gray-50/80 border-r border-gray-200 sticky left-0 z-10 whitespace-nowrap">
+                          {slotTime}
                         </td>
 
-                        {/* Actions */}
-                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                          {task.status === "submitted" ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleReview(task, "approve")}
-                                disabled={reviewLoadingId === task._id}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition"
-                                title="Approve Task"
-                              >
-                                ✅ Approve
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const reason = prompt("Enter decline reason:");
-                                  if (reason) {
-                                    setReviewNoteDraft({ ...reviewNoteDraft, [task._id]: reason });
-                                    handleReview(task, "decline");
-                                  }
-                                }}
-                                disabled={reviewLoadingId === task._id}
-                                className="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition"
-                                title="Decline Task"
-                              >
-                                ❌ Decline
-                              </button>
-                              <button
-                                onClick={() => handleDeleteTask(task)}
-                                className="text-gray-400 hover:text-rose-600 p-1 text-sm transition"
-                                title="Delete Schedule Item"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-end gap-2">
-                              {task.status === "approved" && (
-                                <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded">
-                                  Approved
-                                </span>
+                        {staffList.map((s) => {
+                          const task = tasks.find(
+                            (t) =>
+                              String(t.assignedTo?._id || t.assignedTo) === String(s._id) &&
+                              t.timeLabel === slotTime
+                          );
+
+                          return (
+                            <td key={s._id} className="px-3 py-2.5 border-r border-gray-200 align-top">
+                              {task ? (
+                                <div className="p-2 rounded-xl bg-farm-50/70 border border-farm-200 space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-900 text-xs">
+                                      {categoryIcon[task.category] || "📋"} {task.category}
+                                    </span>
+                                    <button
+                                      onClick={() => handleDeleteTask(task)}
+                                      className="text-gray-300 hover:text-rose-600 text-xs"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                  <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded-md ${statusStyle[task.status]}`}>
+                                    {statusLabel[task.status]}
+                                  </span>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setSelectedStaffId(s._id);
+                                    setAddScheduleModalOpen(true);
+                                    setQuickScheduleForm({
+                                      ...quickScheduleForm,
+                                      staffIds: [s._id],
+                                      timeLabel: slotTime,
+                                    });
+                                  }}
+                                  className="w-full py-2 border border-dashed border-gray-200 hover:border-farm-400 rounded-xl text-gray-400 hover:text-farm-600 text-[11px] font-medium transition"
+                                >
+                                  + Assign
+                                </button>
                               )}
-                              {task.status === "declined" && (
-                                <span className="text-[10px] text-rose-700 font-semibold bg-rose-50 px-2 py-0.5 rounded">
-                                  Declined
-                                </span>
-                              )}
-                              <button
-                                onClick={() => handleDeleteTask(task)}
-                                className="text-gray-400 hover:text-rose-600 p-1 text-sm transition"
-                                title="Delete Schedule Item"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          )}
-                        </td>
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
-              <Pagination page={page} totalItems={visibleTasks.length} pageSize={PAGE_SIZE} onChange={setPage} />
             </div>
           )}
         </>
@@ -761,7 +871,7 @@ const WorkManage = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Time Slot (e.g. 07:00 - 08:00 AM)</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Time Slot (e.g. 07:00 AM - 08:00 AM)</label>
                   <input
                     type="text"
                     placeholder="e.g. 07:00 AM - 08:00 AM"
@@ -992,14 +1102,17 @@ const WorkManage = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Time Slot (e.g. 07:00 AM - 07:30 AM)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 07:00 AM - 07:30 AM"
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Time Slot (e.g. 07:00 AM - 08:00 AM)</label>
+                  <select
                     value={quickScheduleForm.timeLabel}
                     onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, timeLabel: e.target.value })}
                     className="w-full text-xs border border-gray-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-farm-500"
-                  />
+                  >
+                    <option value="">Select Time Slot...</option>
+                    {TIME_SLOTS_7AM_8PM.map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
