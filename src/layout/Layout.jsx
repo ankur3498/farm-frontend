@@ -31,7 +31,6 @@ const NAV_ITEMS = [
   },
   { label: "Animal Tagging", path: "/animals", icon: "🏷️", enabled: true },
   { label: "Assets", path: "/assets", icon: "🧰", enabled: true },
-  { label: "Daily Schedule", path: "/schedule", icon: "🗓️", enabled: true, roles: ["admin", "manager_operations"] },
 ];
 
 const MOBILE_QUICK_NAV = [
